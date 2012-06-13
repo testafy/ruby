@@ -22,7 +22,6 @@ module Testafy
             @login_name = login_name
             @pbehave = pbehave
             @base_uri = "app.testafy.com/api/v0/"
-            @product = "Google"
             @password = password
         end
 
@@ -30,7 +29,6 @@ module Testafy
         def json
             vars = {}
             vars["pbehave"] = @pbehave
-            vars["product"] = @product
             vars["asynchronous"] = true
             vars["trt_id"] = @test_id unless @test_id.nil?
 
