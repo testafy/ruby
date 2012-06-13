@@ -17,11 +17,11 @@ module Testafy
 
         # Store any known parameters associated with this test. 
         def initialize login_name, password, \
-            pbehave = "For the url http://www.google.com\nthen pass this test",
+            pbehave = "For the url http://www.google.com\nthen pass this test"
 
             @login_name = login_name
             @pbehave = pbehave
-            @base_uri = base_uri
+            @base_uri = "app.testafy.com/api/v0/"
             @product = "Google"
             @password = password
         end
@@ -73,7 +73,7 @@ module Testafy
         #   async:: if the test should be run asynchronously, returning before 
         #       it has completed.
         # Return:: 
-        #  test_id of the test, which the server usEs to identify a 
+        #  test_id of the test, which the server uses to identify a 
         #       particular _run_ of a test 
         #       (ie returns a new test_id for every call to run)
 
@@ -83,7 +83,7 @@ module Testafy
 
             return @test_id if @test_id.nil? or async
 
-            sleep 1 until test.done?
+            sleep 1 until done?
 
             @test_id
         end
@@ -101,14 +101,21 @@ module Testafy
             response["status"]
         end
 
+        # Get whether or not a test is done running.
+        # Return::
+        #   false if the test_id is nil
+        #   false if the test has no status, if the status is "queued",
+        #       or if the status is "running"
+        #   true otherwise
+
         def done?
             return false if @test_id.nil?
 
             s = status
-            return (s != "queued" and s != "running")
+            return (!s.nil? and s != "queued" and s != "running")
         end
 
-        # Get the number of checks ("then" statements) of the PBehave code that 
+        # Get the number of "then" statements in the PBehave code that 
         # passed
         # Return::
         #   - the number of "then" statements that passed
@@ -119,7 +126,7 @@ module Testafy
         def passed
             return 0 if @test_id.nil?
 
-            response = api_request "test/passed"
+            response = api_request "test/stats/passed"
 
             response["passed"]
         end
@@ -135,7 +142,7 @@ module Testafy
         def failed
             return 0 if @test_id.nil?
 
-            response = api_request "test/failed"
+            response = api_request "test/stats/failed"
             response["failed"]
         end
 
@@ -151,7 +158,7 @@ module Testafy
         def planned
             return 0 if @test_id.nil?
 
-            response = api_request "test/planned"
+            response = api_request "test/stats/planned"
             response["planned"]
         end
 

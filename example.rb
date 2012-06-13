@@ -18,7 +18,3 @@ test.run true
 sleep 1 until test.done?
 puts "\nresults: \n" + test.results_string
 
-# Read the error on an invalid test
-test.pbehave = ""
-test.run 
-puts test.error
