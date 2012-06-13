@@ -1,0 +1,8 @@
+Testafy requires that you have rubygems installd.
+It requires 2 gems, in addition:
+    rest-client
+    json
+
+They are both installable via 'gem install gemname'.
+Once you have them installed, simply "require 'testafy'" and run tests to your heart's content!
+(Testafy should be in the same directory as files requiring it.)
