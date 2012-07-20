@@ -1,6 +1,7 @@
 require 'rubygems'
 require 'rest-client'
 require 'json'
+require 'base64'
 
 # This class holds the information necessary to run tests on Testafy's servers.
 # It encompasses the API calls, hopefully making integration
@@ -12,41 +13,51 @@ require 'json'
 module Testafy
 
     class Test
-        attr_accessor :login_name, :pbehave, \
-            :test_id, :message, :error, :base_uri, :password
+        attr_accessor :login_name, :pbehave, :test_id, :message, :error, \
+            :base_uri, :password, :step_screenshots, :results_type
+        
+        def self.try_it_now
+            t = Test.new("try_it_now", "")
+            t.pbehave = %q{#Remember, try_it_now tests can only be 3 lines long 
+                # and automatically have a 2-second delay between steps.
+                For the url http://testafy.com
+                When the "About Us" link is clicked
+                Then the text "Community. Efficiency. Innovation. Reliability." is present
+                }
+
+            return t
+        end
 
         # Store any known parameters associated with this test. 
         def initialize login_name, password, \
-            pbehave = "For the url http://www.google.com\nthen pass this test"
+            pbehave = "then pass this test"
 
             @login_name = login_name
             @pbehave = pbehave
-            @base_uri = "app.testafy.com/api/v0/"
+            @base_uri = "https://app.testafy.com/api/v0/"
             @password = password
         end
 
-        # Return the stored test parameters as JSON, as required by the server.
-        def json
-            vars = {}
-            vars["pbehave"] = @pbehave
-            vars["asynchronous"] = true
-            vars["trt_id"] = @test_id unless @test_id.nil?
-
-            JSON.generate(vars)
-        end
-
-        # An internal method to generate the right URI
-        def uri command
-            "https://" + @login_name + ":" + @password + "@" + @base_uri + command
-        end
-        private :uri
-
         # An internal method to make an API call.
-        def api_request command
-            raise ArgumentError, "There's no base URI! Please set @base_uri." unless @base_uri
+        def api_request command, vars=nil
+            unless @base_uri
+                raise ArgumentError, "No base URI! Please set @base_uri." 
+            end
+            
+            # defaults to passing a test_id, if there is one.
+            vars = {"trt_id" => @test_id} if (@test_id and not vars)
+
+            json = JSON.generate(vars)
 
             begin
-                response = JSON.parse RestClient.post(uri(command), :json => json)
+                response = JSON.parse(RestClient::Request.execute( \
+                        :method => :post, \
+                        :url => base_uri + command, \
+                        :payload => { :json => json }, \
+                        :user => @login_name, \
+                        :password => @password \
+                    )
+                )
 
                 @message = response['message'] unless response['message'].nil?
                 @error = response['error'] unless response['error'].nil?
@@ -67,23 +78,36 @@ module Testafy
         private :api_request
 
         # Run a test.
-        # Parameter:
-        #   async:: if the test should be run asynchronously, returning before 
-        #       it has completed.
+        #
         # Return:: 
         #  test_id of the test, which the server uses to identify a 
         #       particular _run_ of a test 
         #       (ie returns a new test_id for every call to run)
 
-        def run async = false
-            response = api_request "test/run"
+        def run
+
+            vars = {"pbehave" => @pbehave}
+            vars["screenshots"] = true if @step_screenshots
+
+            path = "test/run"
+            path = "try_it_now/run" if login_name == "try_it_now"
+            response = api_request path, vars
+
             @test_id = response["test_run_test_id"]
+        end
 
-            return @test_id if @test_id.nil? or async
+        # Run a test and wait for it to complete.
+        #
+        # Return::
+        #   test_id of the test, which the server uses to identify a particular
+        #       test run.
 
-            sleep 1 until done?
+        def run_and_wait
+            id = run
+            return nil if id.nil?
 
-            @test_id
+            sleep 5 until done?
+            return id
         end
 
         # Get the status of the test
@@ -92,9 +116,11 @@ module Testafy
         #   One of "unscheduled" "queued" "running" "stopped" or "completed"
 
         def status
-            return "unscheduled" if @test_id.nil?
+            return nil if @test_id.nil?
 
-            response = api_request "test/status"
+            path = "test/status"
+            path = "try_it_now/status" if login_name == "try_it_now"
+            response = api_request path
 
             response["status"]
         end
@@ -124,7 +150,9 @@ module Testafy
         def passed
             return 0 if @test_id.nil?
 
-            response = api_request "test/stats/passed"
+            path = "test/stats/passed"
+            path = "try_it_now/stats/passed" if login_name == "try_it_now"
+            response = api_request path
 
             response["passed"]
         end
@@ -140,7 +168,9 @@ module Testafy
         def failed
             return 0 if @test_id.nil?
 
-            response = api_request "test/stats/failed"
+            path = "test/stats/failed"
+            path = "try_it_now/stats/failed" if login_name == "try_it_now"
+            response = api_request path
             response["failed"]
         end
 
@@ -156,7 +186,10 @@ module Testafy
         def planned
             return 0 if @test_id.nil?
 
-            response = api_request "test/stats/planned"
+            path = "test/stats/planned"
+            path = "try_it_now/stats/planned" if login_name == "try_it_now"
+            response = api_request path
+
             response["planned"]
         end
 
@@ -167,7 +200,12 @@ module Testafy
         #       Results are in TAP (Test Anything Protocol) format.
 
         def results
-            response = api_request "test/results"
+            vars = {"trt_id"=> @test_id}
+            vars["type" => @results_type] if @results_type
+
+            path = "test/results"
+            path = "try_it_now/results" if login_name == "try_it_now"
+            response = api_request path, vars
             response["results"]
         end
 
@@ -183,13 +221,117 @@ module Testafy
         #   - a string stating whether the PBehave code is valid, and if it 
         #       is not, why it is not.
         def phrase_check
-            response = api_request "phrase_check"
+            response = api_request "phrase_check", \
+                { "pbehave" => @pbehave }
             response["message"]
         end
 
+        # Get a list of the screenshots for this test run.
+        #
+        # Return::
+        #   filenames
+        #       A list of the names of the screenshots on the server. 
+        
+        def screenshots
+            return nil if @test_id.nil?
+
+            path = "test/screenshots"
+            path = "try_it_now/screenshots" if login_name == "try_it_now"
+            r = api_request path
+            return r['screenshots']
+        end
+       
+        # Get a screenshot as a base64 encoded string
+        #
+        # Parameter::
+        #   screenshot_name::
+        #       The name of the screenshot to get
+        #
+        # Return::
+        #   screenshot::
+        #       A string containing the base64 encoded image
+     
+        def screenshot_as_base64 screenshot_name
+            return nil if @test_id.nil?
+      
+            vars = {"filename" => screenshot_name, "trt_id" => @test_id}
+            path = "test/screenshot"
+            path = "try_it_now/screenshot" if login_name == "try_it_now"
+            r = api_request path, vars
+       
+            return r["screenshot"]
+        end
+       
+        # Get a hash containing all of the saved screenshots from this test run
+        # as base64 encoded strings
+        #
+        # Return::
+        #   screenshots::
+        #       A mapping from screenshot names to the base64 encoded strings containing the screenshots
+       
+        def all_screenshots_as_base64
+            all_screenshots = Hash.new
+            screenshots.each do |screenshot_name|
+                ss = screenshot_as_base64 screenshot_name
+                all_screenshots[screenshot_name] = ss
+            end
+            return all_screenshots
+        end
+
+        # Save a single screenshot from this test run.
+        #
+        # Parameter::
+        #   screenshot_name::
+        #       which screenshot to get from the server.
+        #   local_filename::
+        #       the name to use for the screenshot locally
+        #
+        # return::
+        #   true if the screenshot was successfully saved
+        #   false if it was not
+       
+        def save_screenshot screenshot_name, local_filename
+            return false if @test_id.nil?
+       
+            ss_64 = screenshot_as_base64 screenshot_name
+            ss = Base64.decode64 ss_64
+        
+            File.open(local_filename, "w+") do |f|
+                f.write ss
+            end
+        
+            return true
+        end
+
+        # Save all screenshots from the current test run
+        #
+        # Parameter::
+        #   local_dir::
+        #       The directory in which to save the screenshots
+        #
+        # Return::
+        #   true if the screenshots are all saved successfully,
+        #   false otherwise
+       
+        def save_all_screenshots dir
+            return false unless File.directory?(dir) or Dir.mkdir(dir)
+
+            dir += "/" unless dir[-1] == "/"
+
+            screenshots.each do |screenshot_name|
+                save_screenshot screenshot_name, dir + screenshot_name
+            end
+
+            return true
+        end
+
+        # Send a barebones request to the API server. Useful for confirming
+        # that everything is set up properly.
+        
         def ping
-            response = api_request "ping"
+            response = api_request "ping", {}
             response["message"]
         end
+
     end
 end

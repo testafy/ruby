@@ -1,8 +1,10 @@
-Testafy requires that you have rubygems installd.
-It requires 2 gems, in addition:
-    rest-client
-    json
+The Testafy module is compatible with Ruby versions 1.8.7 and later.
 
-They are both installable via 'gem install gemname'.
-Once you have them installed, simply "require 'testafy'" and run tests to your heart's content!
-(Testafy should be in the same directory as files requiring it.)
+Testafy requires that you have rubygems installed.
+It requires 2 gems, in addition:
+    rest-client (install with 'gem install rest-client')
+    json (install with 'gem install json')
+
+Once you have them installed, just "require 'testafy'" and start running tests!
+
+Note for Ruby 1.9.2+, if Testafy is in the working directory, try "require_relative 'testafy'" instead.

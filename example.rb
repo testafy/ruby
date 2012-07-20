@@ -4,17 +4,17 @@ require 'testafy'
 test = Testafy::Test.new "user", "pass"
 
 # The pbehave is set to this by default. Set explicitly here for demonstration.
-test.pbehave = "For the url http://www.google.com\nthen pass this test"
+test.pbehave = "then pass this test"
 
-# Run a test synchronously
-test.run
+# Run a test
+test.run_and_wait()
 puts "passed: #{test.passed}, failed: #{test.failed}, total: #{test.planned}"
 # test.results_string gives us a string in TAP format.
 puts "\nresults:\n" + test.results_string
 
-# Run a test asynchronously
-test.run true
+# Run a test and do some other stuff while we wait
+test.run
 # Do some other stuff, if we want.
-sleep 1 until test.done?
+sleep 5 until test.done?
 puts "\nresults: \n" + test.results_string
 
